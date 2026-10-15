@@ -101,6 +101,12 @@ details.sec>.in{padding:0 16px 14px}
 .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}.cw{text-align:center;color:var(--mu);font-size:12px;padding-bottom:2px}
 .cd{border:1px solid var(--ln);border-radius:12px;min-height:60px;padding:6px 1px;color:var(--tx);display:flex;flex-direction:column;align-items:center;justify-content:space-between;min-width:0}
 .cd i{font-style:normal;font-size:12px;color:var(--mu)}.cd span{font-size:11px;font-weight:700;white-space:nowrap}.cd.td{border:2px solid var(--ac)}
+.cd.sel{box-shadow:0 0 0 2px var(--tx) inset}.cd em{font-style:normal;font-size:10px;font-weight:700;color:var(--mu);line-height:1}.cd em.all{color:var(--ok)}
+.td-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--ln)}.td-row:last-of-type{border-bottom:0}
+.td-row .ck{flex:none;width:24px;height:24px;border-radius:8px;border:2px solid var(--mu);background:none;display:grid;place-items:center;padding:0;color:#fff;font-size:14px;font-weight:700}
+.td-row.done .ck{background:var(--ok);border-color:var(--ok)}
+.td-row .tt{flex:1;font-size:15px;cursor:pointer;word-break:break-word}.td-row.done .tt{color:var(--mu);text-decoration:line-through}
+.td-add{display:flex;gap:8px;margin-top:10px}.td-add input{flex:1}
 /* sheets */
 .dlg{position:fixed;inset:0;background:rgba(15,25,35,.45);display:none;align-items:flex-end;justify-content:center;z-index:9;overflow:auto}
 .dlg>div{background:var(--card);border-radius:24px 24px 0 0;padding:20px 18px calc(env(safe-area-inset-bottom,0px) + 20px);width:100%;max-width:600px;max-height:92vh;overflow:auto;animation:up .22s ease-out}
@@ -135,7 +141,7 @@ details.sec>.in{padding:0 16px 14px}
 var PAL=["#0070f2","#e76500","#188918","#8a3fd1","#c0399f","#d1293b","#0097a7","#e0a100","#5b5fc7","#a0522d"];
 var DEF=["💼 Work","📚 Study","🏃 Exercise","👥 Social","🧹 Chores","🍽 Meals","🚌 Commute","📱 Scrolling","😴 Rest"];
 var LBL={home:"🏠 Home",college:"🎓 College",transit:"🚌 Commute"};
-var showOff=false,secOpen={},logView="act",peIdx=null,calOff=0,S,tab="track",off=0,range="day",pickD="",logN=100,nref=null,wd=null,edIdx=null,edList=[],addCat=null,addMsg="";
+var calSel=ds(new Date()),showOff=false,secOpen={},logView="act",peIdx=null,calOff=0,S,tab="track",off=0,range="day",pickD="",logN=100,nref=null,wd=null,edIdx=null,edList=[],addCat=null,addMsg="";
 var lastFix=null,pend=null,gi=null,geoMsg="Not started",info=null,wlk=null,bnT=null,bnUndo=null;
 function $(i){return document.getElementById(i)}
 function ld(k,d){try{var v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}
@@ -203,18 +209,4 @@ function startAt(pid,c,t){var keep=S.a;S.a=pid||S.a;var L=P().log,c0=cur();
 async function drainQ(){try{var ch=await caches.open("timely-q"),r=await ch.match("q");if(!r)return;var q=await r.json();await ch.delete("q");
   if(!q.length)return;q.sort(function(x,y){return x.t-y.t}).forEach(function(x){startAt(x.p,x.c,x.t)});render();note()}catch(e){}}
 if("serviceWorker" in navigator)navigator.serviceWorker.addEventListener("message",function(e){if(e.data&&e.data.timelyQ)drainQ()});
-setInterval(function(){if(cur())note()},60000);
-async function enableNote(){
-  if(!("Notification" in window)){say("Notifications aren't supported here.");return}
-  var r=await Notification.requestPermission();S.notif=r==="granted";save();
-  if(!S.notif)say("Notification permission was denied. Allow it in Android Settings, Apps, Timely, Notifications.");else{note();if(!cur())testNote()}
-  render();
-}
-async function testNote(){
-  try{var reg=await navigator.serviceWorker.getRegistration();
-    if(reg)await reg.showNotification("⏱ Timely",{body:"Notifications are on.",tag:"timely-test"});else nref=new Notification("⏱ Timely",{body:"Notifications are on."});
-  }catch(e){say("This device blocked the notification.")}
-}
-
-/* places (a separate layer that runs alongside activities) */
-var PL={home:"🏠 Home",col
+setInterval(function(){if(cur())note()},600
