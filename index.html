@@ -111,6 +111,10 @@ details.sec>.in{padding:0 16px 14px}
 #nudge .nt{flex:1;display:flex;flex-direction:column;font-size:14px;line-height:1.3;min-width:0}#nudge .nt .mu{font-size:12px}
 .tag{font-size:11px;font-weight:600;color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent);border-radius:99px;padding:2px 8px;margin-left:6px;vertical-align:2px}
 #ask{z-index:11}
+.at-row{display:flex;align-items:center;gap:6px;padding:8px 0;border-bottom:1px solid var(--ln)}.at-row:last-child{border:0}.at-row b{flex:1;font-size:15px}
+.chip.p.on{background:var(--ok);border-color:var(--ok)}.chip.a.on{background:var(--bad);border-color:var(--bad)}
+.at-t td{padding:9px 4px}.at-t .lo{color:var(--bad);font-weight:700}.at-t .hi{color:var(--ok);font-weight:700}
+#cmp{width:100%;min-height:76px;resize:vertical;font-size:15px;line-height:1.4}
 /* sheets */
 .dlg{position:fixed;inset:0;background:rgba(15,25,35,.45);display:none;align-items:flex-end;justify-content:center;z-index:9;overflow:auto}
 .dlg>div{background:var(--card);border-radius:24px 24px 0 0;padding:20px 18px calc(env(safe-area-inset-bottom,0px) + 20px);width:100%;max-width:600px;max-height:92vh;overflow:auto;animation:up .22s ease-out}
@@ -407,6 +411,8 @@ function exp(pid,kind){
   var pr=S.p.filter(function(p){return p.id===pid})[0],out,name="Timely-"+(pr.n.replace(/[^\w-]+/g,"_")||"profile")+"-"+ds(new Date())+"."+(kind==="csv"?"csv":"txt");
   var R=pr.log.map(function(l){var s=new Date(l.s),e=l.e?new Date(l.e):null;return{k:ds(s)+" "+ts(s),d:ds(s),s:ts(s),e:e?ts(e):"running",m:Math.round(((l.e||Date.now())-l.s)/60000),c:l.c}});
   var W=pr.wakes||{};Object.keys(W).forEach(function(k){if(W[k]){var t=ts(new Date(W[k]));R.push({k:k+" "+t,d:k,s:t,e:t,m:0,c:"⏰ Woke up"})}});
+  Object.keys(pr.att||{}).forEach(function(k){var d=pr.att[k];Object.keys(d).forEach(function(x){R.push({k:k+" 00:00",d:k,s:"00:00",e:"00:00",m:0,c:"📋 Attendance: "+x+" – "+(d[x]==="p"?"Present":"Absent")})})});
+  Object.keys(pr.comp||{}).forEach(function(k){if(pr.comp[k])R.push({k:k+" 00:00",d:k,s:"00:00",e:"00:00",m:0,c:"🏢 Companies visited: "+pr.comp[k]})});
   Object.keys(pr.todos||{}).forEach(function(k){pr.todos[k].forEach(function(x){R.push({k:k+" 00:00",d:k,s:"00:00",e:"00:00",m:0,c:(x.d?"✅":"⬜")+" To-do: "+x.t})})});
   (pr.plog||[]).forEach(function(l){if(!l.e)return;var s0=new Date(l.s),e0=new Date(l.e);R.push({k:ds(s0)+" "+ts(s0),d:ds(s0),s:ts(s0),e:ts(e0),m:Math.round((l.e-l.s)/6e4),c:PL[l.z]})});
   var B=pr.beds||{};Object.keys(B).forEach(function(k){if(B[k]){var bd=new Date(B[k]),t=ts(bd),d2=ds(bd);R.push({k:d2+" "+t,d:d2,s:t,e:t,m:0,c:"🌙 Went to sleep"})}});
@@ -501,9 +507,13 @@ function fromLogText(txt){var out=[];txt.split(/\r?\n/).forEach(function(line){
   var y=m[1]?+m[1]:inferYear(mo,da),d=y+"-"+p2(mo)+"-"+p2(da);
   out.push({d:d,s:normTime(m[4]),e:/\d/.test(m[5])?normTime(m[5]):null,a:a})});return out}
 function mergeRows(items){
-  var p=P(),seen={},n=0,wk=0,dup=0,run=0,zero=0,clip=0,plc=0,tdc=0;
+  var p=P(),seen={},n=0,wk=0,dup=0,run=0,zero=0,clip=0,plc=0,tdc=0,atc=0,cmc=0;
   p.log.forEach(function(l){seen[l.c+"|"+l.s]=1;if(l.e)seen[l.c+"|e"+l.e]=1});
   items.forEach(function(r){
+    var am=r.a.match(/^📋\s*Attendance:\s*(.+?)\s*[–-]\s*(Present|Absent)\s*$/i);
+    if(am){p.att=p.att||{};var ad=p.att[r.d]=p.att[r.d]||{},av=/^p/i.test(am[2])?"p":"a";if(ad[am[1]]===av){dup++;return}ad[am[1]]=av;if(subjects().indexOf(am[1])<0)p.subj.push(am[1]);atc++;return}
+    var cm=r.a.match(/^🏢\s*Companies visited:\s*([\s\S]+)$/i);
+    if(cm){p.comp=p.comp||{};if(p.comp[r.d]===cm[1]){dup++;return}p.comp[r.d]=cm[1];cmc++;return}
     var tm=r.a.match(/^(✅|⬜)\s*To-do:\s*(.+)$/);
     if(tm){var tl3=(p.todos=p.todos||{})[r.d]=(p.todos[r.d]||[]);if(tl3.some(function(x){return x.t===tm[2]})){dup++;return}tl3.push({t:tm[2],d:tm[1]==="✅"});tdc++;return}
     var pz=placeOf(r.a);
@@ -528,7 +538,7 @@ function mergeRows(items){
     if(!p.wakes[k]){p.wakes[k]=l.e;if(!p.beds[k])p.beds[k]=l.s;iw++}
     else if(!p.beds[k]&&Math.abs(p.wakes[k]-l.e)<2*36e5){p.beds[k]=l.s;iw++}});
   save();
-  return "Imported "+n+" activities"+(plc?", "+plc+" place visits":"")+(tdc?", "+tdc+" to-dos":"")+(iw?", worked out "+iw+" nights of sleep":"")+(wk?" and "+wk+" sleep times":"")+(dup?", skipped "+dup+" already there":"")+(zero?", "+zero+" zero-length":"")+(run?", "+run+" still running":"")+(clip?", trimmed "+clip+" overlaps":"")+".";
+  return "Imported "+n+" activities"+(plc?", "+plc+" place visits":"")+(tdc?", "+tdc+" to-dos":"")+(atc?", "+atc+" attendance marks":"")+(cmc?", "+cmc+" company notes":"")+(iw?", worked out "+iw+" nights of sleep":"")+(wk?" and "+wk+" sleep times":"")+(dup?", skipped "+dup+" already there":"")+(zero?", "+zero+" zero-length":"")+(run?", "+run+" still running":"")+(clip?", trimmed "+clip+" overlaps":"")+".";
 }
 /* backup & restore */
 function dl(name,text,type){try{var u=URL.createObjectURL(new Blob([text],{type:type})),a=document.createElement("a");a.href=u;a.download=name;a.style.display="none";document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(u);a.remove()},10000);return true}catch(e){return false}}
@@ -579,7 +589,7 @@ function doImport(txt){
   var items=[];
   for(var i=st;i<rows.length;i++){var r=rows[i],d=normDate(r[ci.d]),s=normTime(r[ci.s]),a=(r[ci.a]||"").trim();
     if(!d||!s||!a){bad++;continue}
-    items.push({d:d,s:s,e:/woke up|went to sleep|bedtime|to-do:/i.test(a)?s:normTime(r[ci.e]),a:a})}
+    items.push({d:d,s:s,e:/woke up|went to sleep|bedtime|to-do:|attendance:|companies visited:/i.test(a)?s:normTime(r[ci.e]),a:a})}
   if(!items.length)return "Couldn't find any entries in that text.";
   return mergeRows(items)+(bad?" ("+bad+" unreadable lines ignored)":"");
 }
@@ -602,6 +612,33 @@ function vDay(k){var TD=todosOf(k),today=ds(new Date()),dn=TD.filter(function(x)
 function tdAddFromInput(){var i=$("tdi");if(!i)return;var v=i.value.trim();if(!v)return;
   v.split(/\n/).forEach(function(x){x=x.trim();if(x)addTodo(calSel,x)});render();var j=$("tdi");if(j)j.focus()}
 document.addEventListener("keydown",function(e){if(e.target&&e.target.id==="tdi"&&e.key==="Enter"){e.preventDefault();tdAddFromInput()}});
+/* attendance + companies visited */
+var SUBJ=["DCPEC","MCT","SGP","SPCET","IKS","OTHER"],cmpT=null;
+function subjects(){var p=P();if(!p.subj)p.subj=SUBJ.slice();return p.subj}
+function attOf(k){var A=P().att||{};return A[k]||{}}
+function setAtt(k,sub,v){var p=P();p.att=p.att||{};var d=p.att[k]=p.att[k]||{};if(d[sub]===v)delete d[sub];else d[sub]=v;if(!Object.keys(d).length)delete p.att[k];save()}
+function attStats(f,t){var o={};subjects().forEach(function(x){o[x]={p:0,a:0}});Object.keys(P().att||{}).forEach(function(k){if(f!=null){var kd=new Date(k+"T00:00:00").getTime();if(!(kd+864e5>f&&kd<t))return}
+  var d=P().att[k];Object.keys(d).forEach(function(x){o[x]=o[x]||{p:0,a:0};o[x][d[x]]++})});return o}
+function attHint(p,a){var n=p+a;if(!n)return "";if(p/n>=0.75){var c=Math.floor(p/0.75-n);return c>0?"Can miss "+c:"Don't miss the next one"}return "Attend "+Math.ceil((0.75*n-p)/0.25)+" more for 75%"}
+function vAtt(k){var A=attOf(k),today=ds(new Date()),lbl=k===today?"today":new Date(k+"T00:00:00").toLocaleDateString(undefined,{day:"numeric",month:"short"});
+  var h='<div class="chips" style="justify-content:space-between;margin:22px 2px 10px"><b style="font-size:16px">Attendance '+lbl+'</b><span class="mu">Tap again to clear</span></div><div class="card">';
+  subjects().forEach(function(x){var v=A[x];h+='<div class="at-row"><b>'+esc(x)+'</b><button class="chip p'+(v==="p"?" on":"")+'" data-at="'+esc(x)+'|p">Present</button><button class="chip a'+(v==="a"?" on":"")+'" data-at="'+esc(x)+'|a">Absent</button></div>'});
+  h+='</div>';
+  var st=attStats(),rows=subjects().filter(function(x){return st[x]&&st[x].p+st[x].a});
+  h+='<div class="hd">Attendance so far</div><div class="card">';
+  if(!rows.length)h+='<div class="mu">Mark Present or Absent above and your totals show up here.</div>';
+  else{var TP=0,TA=0;h+='<table class="at-t"><tr><th>Subject</th><th>Attended</th><th>%</th><th></th></tr>';
+    rows.forEach(function(x){var p=st[x].p,a=st[x].a,pc=Math.round(p/(p+a)*100);TP+=p;TA+=a;
+      h+='<tr><td><b>'+esc(x)+'</b></td><td>'+p+'/'+(p+a)+'</td><td class="'+(pc<75?"lo":"hi")+'">'+pc+'%</td><td class="mu" style="font-size:12px">'+attHint(p,a)+'</td></tr>'});
+    var tp=Math.round(TP/(TP+TA)*100);h+='<tr><td><b>All</b></td><td>'+TP+'/'+(TP+TA)+'</td><td class="'+(tp<75?"lo":"hi")+'">'+tp+'%</td><td></td></tr></table>'}
+  return h+'</div>';
+}
+function vComp(k){var C=P().comp||{},all=Object.keys(C).filter(function(x){return C[x]}).sort().reverse();
+  var h='<div class="hd">Companies visited</div><div class="card"><textarea id="cmp" class="ti" placeholder="Who did you visit or meet? Saved as you type." data-k="'+k+'">'+esc(C[k]||"")+'</textarea><div class="mu" id="cmps" style="margin-top:6px">'+(C[k]?"Saved":"")+'</div></div>';
+  if(all.length)h+='<details class="sec" data-sec="cmpall"'+(secOpen.cmpall?" open":"")+'><summary><b>All companies visited</b><span class="mu">'+all.length+(all.length>1?" days":" day")+'</span></summary><div class="in">'+all.map(function(x){return '<div class="row" data-cs="'+x+'" style="cursor:pointer;display:block"><div class="mu">'+new Date(x+"T00:00:00").toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"})+'</div><div style="white-space:pre-wrap">'+esc(C[x])+'</div></div>'}).join("")+'</div></details>';
+  return h}
+document.addEventListener("input",function(e){if(e.target.id!=="cmp")return;var el=e.target,k=el.dataset.k;clearTimeout(cmpT);
+  cmpT=setTimeout(function(){var p=P();p.comp=p.comp||{};var v=el.value.trim();if(v)p.comp[k]=el.value;else delete p.comp[k];save();var m=$("cmps");if(m)m.textContent="Saved"},400)});
 /* calendar */
 function dayTotals(){var T={};P().log.forEach(function(l){var s=l.s,e=l.e||Date.now();
   while(s<e){var d=new Date(s);d.setHours(24,0,0,0);var nx=Math.min(d.getTime(),e),k=ds(new Date(s));T[k]=(T[k]||0)+nx-s;s=nx}});return T}
@@ -618,7 +655,7 @@ function vCal(){
   for(i=1;i<=n;i++){k=key(i);var v=T[k]||0;
     var TD=todosOf(k),dn=TD.filter(function(x){return x.d}).length;
     h+='<button class="cd'+(k===ds(now)?" td":"")+(k===calSel?" sel":"")+'" data-cs="'+k+'" style="background:color-mix(in srgb,var(--ac) '+(mx?Math.round(v/mx*38):0)+'%,var(--card))"><i>'+i+'</i><span>'+(v?fmtc(v):"")+'</span>'+(TD.length?'<em class="'+(dn===TD.length?"all":"")+'">✓'+dn+'/'+TD.length+'</em>':'<em></em>')+'</button>'}
-  return h+'</div></div>'+vDay(calSel);
+  return h+'</div></div>'+vDay(calSel)+vAtt(calSel)+vComp(calSel);
 }
 /* views */
 function vTrack(){
@@ -709,6 +746,8 @@ function vIns(){
     if(fz&&fv/fu>=0.5)F.push(["📍",'<b>'+Math.round(fv/fu*100)+'%</b> of your leisure & phone time happens at '+PL[fz]+'.'])}
   if(PT.college>=60*6e4){var cpv=fh2("college","prod"),ctot=fh2("college");if(ctot>=30*6e4)F.push(["🎓",'At college, <b>'+Math.round(cpv/ctot*100)+'%</b> of your tracked time was productive ('+fmt(cpv)+' of '+fmt(ctot)+').'])}
   var tdT=0,tdD=0;Object.keys(P().todos||{}).forEach(function(k){var kd=new Date(k+"T00:00:00").getTime();if(kd+864e5>R.f&&kd<R.t)P().todos[k].forEach(function(x){tdT++;if(x.d)tdD++})});
+  var AS=attStats(R.f,R.t),AP=0,AA=0;Object.keys(AS).forEach(function(x){AP+=AS[x].p;AA+=AS[x].a});
+  if(AP+AA){var lowS=Object.keys(AS).filter(function(x){var q=AS[x];return q.p+q.a&&q.p/(q.p+q.a)<0.75});F.push(["📋",'Attended <b>'+AP+' of '+(AP+AA)+'</b> classes ('+Math.round(AP/(AP+AA)*100)+'%)'+(lowS.length?'. Below 75%: '+lowS.map(esc).join(", ")+'.':'.')])}
   if(tdT)F.push(["✅",'Ticked off <b>'+tdD+' of '+tdT+'</b> things on your lists.']);
   if(F.length)h+='<div class="hd">What stands out</div><div class="card">'+F.slice(0,8).map(function(f){return '<div class="fi"><span>'+f[0]+'</span><span>'+f[1]+'</span></div>'}).join("")+'</div>';
   /* when */
@@ -802,6 +841,7 @@ function tick(){
 /* events */
 document.addEventListener("click",function(ev){
   var t=ev.target,b=t.closest("button"),r=t.closest("[data-ed]"),w=t.closest("[data-wd]");
+  var cr0=t.closest("div[data-cs]");if(!b&&cr0&&!t.closest(".dlg")){calSel=cr0.dataset.cs;render();window.scrollTo(0,0);return}
   var tk0=t.closest("span[data-tk]");if(!b&&tk0){var tq=todosOf(calSel)[+tk0.dataset.tk];if(tq){tq.d=!tq.d;save();render()}return}
   var pr0=t.closest("[data-pe]");if(!b&&pr0&&!t.closest(".dlg")){openPE(+pr0.dataset.pe);return}
   if(!b){if(r&&!t.closest(".dlg"))openEdit(r.dataset.ed==="cur"?"cur":+r.dataset.ed);else if(w&&!t.closest(".dlg"))openWake(w.dataset.wd);return}
@@ -818,6 +858,7 @@ document.addEventListener("click",function(ev){
   else if(D.cm){calOff+=+D.cm;a=true}
   else if(D.cd){pickD=D.cd;range="date";tab="ins";a=true}
   else if(D.cs){calSel=D.cs;a=true}
+  else if(D.at){var aq=D.at.split("|");setAtt(calSel,aq[0],aq[1]);a=true}
   else if(D.tk!==undefined){var tl=todosOf(calSel)[+D.tk];if(tl){tl.d=!tl.d;save();a=true}}
   else if(D.tx!==undefined){var tl2=todosOf(calSel),ti=+D.tx;var rm=tl2.splice(ti,1)[0];save();a=true;if(rm)setTimeout(function(){banner("Deleted “"+rm.t+"”",function(){tl2.splice(ti,0,rm);save();render()})},0)}
   else if(b.id==="tda"){tdAddFromInput()}
@@ -860,5 +901,5 @@ if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(
 setInterval(tick,1000);setInterval(wakeCheck,60000);
 (function(){var u=new URLSearchParams(location.search),st=u.get("start");
   if(st||u.get("stop")){startAt(S.a,st||STOP,Date.now());history.replaceState(null,"",location.pathname);if(st)setTimeout(function(){banner("Started "+st+" from shortcut")},300)}})();
-drainQ();render();wakeCheck();geoStart();wlSet();note();
+drainQ();render();window.__timelyReady=true;wakeCheck();geoStart();wlSet();note();
 </script></body></html>
